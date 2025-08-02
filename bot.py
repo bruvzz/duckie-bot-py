@@ -1,4 +1,3 @@
-# at top: imports remain the same
 import os
 import sys
 import asyncio
@@ -10,26 +9,22 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 
-# --- Load env ---
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 CHANNEL_ID = int(os.getenv("NOTIFY_CHANNEL_ID", ""))
 EVERYONE_PING = "@everyone"
 
-# --- Logging ---
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
 )
 logger = logging.getLogger("bot")
 
-# --- Intents ---
 intents = discord.Intents.default()
 intents.guilds = True
 intents.members = True
 intents.messages = True
 intents.message_content = True
 
-# --- State ---
 current_windows_hash: str | None = None
 future_windows_hash: str | None = None
 
@@ -61,29 +56,24 @@ def global_excepthook(exc_type, exc_value, exc_traceback):
 sys.excepthook = global_excepthook
 
 
-# --- Bot subclass to hook into setup ---
 class MyBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=intents, application_id=None)
 
     async def setup_hook(self):
-        # This runs inside the event loop before login is complete.
         loop = asyncio.get_running_loop()
         loop.set_exception_handler(handle_loop_exception)
-        # Sync slash commands on startup (optional)
         try:
             await self.tree.sync()
             logger.info("Slash commands synced.")
         except Exception as e:
             logger.warning(f"Slash command sync failed: {e}")
 
-        # Kick off background monitor once the loop is running
         self.loop.create_task(monitor_hash_updates_loop())
 
 
 bot = MyBot()
 
-# --- UI Views (same as before) ---
 class VersionButtonView(discord.ui.View):
     def __init__(self, hash_str: str, *, timeout: float | None = None):
         super().__init__(timeout=timeout)
@@ -107,7 +97,6 @@ class FutureBuildView(discord.ui.View):
         )
 
 
-# --- Helpers ---
 async def fetch_json(url: str) -> dict | None:
     try:
         async with aiohttp.ClientSession() as session:
@@ -189,7 +178,6 @@ async def monitor_hash_updates_loop():
         await asyncio.sleep(3)
 
 
-# --- Events ---
 @bot.event
 async def on_ready():
     global current_windows_hash, future_windows_hash
@@ -239,7 +227,6 @@ async def on_message(message: discord.Message):
     await bot.process_commands(message)
 
 
-# --- Diagnostic slash ping command ---
 @bot.tree.command(name="ping", description="Check bot latency.")
 async def ping(interaction: discord.Interaction):
     start = datetime.now(timezone.utc)
@@ -261,7 +248,6 @@ async def ping(interaction: discord.Interaction):
     await interaction.edit_original_response(embed=embed)
 
 
-# --- Entry point ---
 async def main():
     if not TOKEN:
         logger.error("Missing TOKEN in environment.")
