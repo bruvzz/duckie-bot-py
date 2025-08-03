@@ -1,8 +1,10 @@
+# bot.py
 import os
 import sys
 import asyncio
 import logging
 from datetime import datetime, timezone
+import importlib.util
 
 import aiohttp
 import discord
@@ -63,16 +65,54 @@ class MyBot(commands.Bot):
     async def setup_hook(self):
         loop = asyncio.get_running_loop()
         loop.set_exception_handler(handle_loop_exception)
+
+        # Load dynamic slash commands from folder
+        await self.load_slash_commands()
+
+        # Sync commands after loading
         try:
             await self.tree.sync()
             logger.info("Slash commands synced.")
         except Exception as e:
             logger.warning(f"Slash command sync failed: {e}")
 
-        self.loop.create_task(monitor_hash_updates_loop())
+        # Start background monitor
+        asyncio.create_task(monitor_hash_updates_loop())
+
+    async def load_slash_commands(self):
+        folder = "slash_commands"
+        if not os.path.isdir(folder):
+            logger.warning(f"Slash commands folder '{folder}' does not exist; skipping dynamic load.")
+            return
+
+        for fname in os.listdir(folder):
+            if not fname.endswith(".py"):
+                continue
+            path = os.path.join(folder, fname)
+            module_name = f"{folder}.{fname[:-3]}"
+            try:
+                spec = importlib.util.spec_from_file_location(module_name, path)
+                if spec is None or spec.loader is None:
+                    logger.warning(f"Could not load spec for {path}")
+                    continue
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)  # type: ignore
+
+                if hasattr(module, "command"):
+                    cmd = getattr(module, "command")
+                    try:
+                        self.tree.add_command(cmd)
+                        logger.info(f"Loaded command from {fname}")
+                    except Exception as e:
+                        logger.warning(f"Failed to add command from {fname}: {e}")
+                else:
+                    logger.debug(f"No 'command' export in {fname}; skipping.")
+            except Exception:
+                logger.exception(f"Error loading command module {fname}:")
 
 
 bot = MyBot()
+
 
 class VersionButtonView(discord.ui.View):
     def __init__(self, hash_str: str, *, timeout: float | None = None):
@@ -225,27 +265,6 @@ async def on_message(message: discord.Message):
         )
 
     await bot.process_commands(message)
-
-
-@bot.tree.command(name="ping", description="Check bot latency.")
-async def ping(interaction: discord.Interaction):
-    start = datetime.now(timezone.utc)
-    await interaction.response.defer(ephemeral=True)
-    end = datetime.now(timezone.utc)
-    bot_latency_ms = int((end - start).total_seconds() * 1000)
-    api_latency_ms = int(bot.latency * 1000)
-    embed = discord.Embed(
-        title="Success",
-        description="Here's my current latency statistics:",
-        color=discord.Colour.greyple(),
-        timestamp=datetime.now(timezone.utc),
-    )
-    embed.add_field(name="Bot Latency", value=f"`{bot_latency_ms}ms`", inline=True)
-    embed.add_field(name="API Latency", value=f"`{api_latency_ms}ms`", inline=True)
-    embed.set_footer(
-        text=f"Requested by {interaction.user}", icon_url=interaction.user.display_avatar.url
-    )
-    await interaction.edit_original_response(embed=embed)
 
 
 async def main():
