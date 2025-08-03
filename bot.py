@@ -1,4 +1,3 @@
-# bot.py
 import os
 import sys
 import asyncio
@@ -13,7 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
-CHANNEL_ID = int(os.getenv("NOTIFY_CHANNEL_ID", ""))
+CHANNEL_ID = int(os.getenv("NOTIFY_CHANNEL_ID", "1384045051482603605"))
 EVERYONE_PING = "@everyone"
 
 logging.basicConfig(
@@ -66,17 +65,14 @@ class MyBot(commands.Bot):
         loop = asyncio.get_running_loop()
         loop.set_exception_handler(handle_loop_exception)
 
-        # Load dynamic slash commands from folder
         await self.load_slash_commands()
 
-        # Sync commands after loading
         try:
             await self.tree.sync()
             logger.info("Slash commands synced.")
         except Exception as e:
             logger.warning(f"Slash command sync failed: {e}")
 
-        # Start background monitor
         asyncio.create_task(monitor_hash_updates_loop())
 
     async def load_slash_commands(self):
@@ -96,7 +92,7 @@ class MyBot(commands.Bot):
                     logger.warning(f"Could not load spec for {path}")
                     continue
                 module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)  # type: ignore
+                spec.loader.exec_module(module)
 
                 if hasattr(module, "command"):
                     cmd = getattr(module, "command")
